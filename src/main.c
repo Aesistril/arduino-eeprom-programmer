@@ -30,8 +30,7 @@ int open_serial(const char *device) {
 
   tty.c_cflag = (tty.c_cflag & ~CSIZE) | CS8; // 8-bit chars
   tty.c_iflag &= ~IGNBRK;                     // disable break processing
-  tty.c_lflag = 0;     // no signaling chars, no echo, no canonical processing
-  tty.c_oflag = 0;     // no remapping, no delays
+  cfmakeraw(&tty); // Fully raw mode — like picocom does
   tty.c_cc[VMIN] = 1;  // read blocks until at least 1 char arrives
   tty.c_cc[VTIME] = 0; // no timeout
 
@@ -50,10 +49,12 @@ int open_serial(const char *device) {
 
   tcflush(fd, TCIOFLUSH);
 
+  sleep(2);
   return fd;
 }
 
 void activate_mode(int serial_fd, const char *mode) {
+  tcflush(serial_fd, TCIFLUSH);       // clear any junk first
   sleep(2);                  // small pre-delay
   write(serial_fd, mode, 2);         // send mode
   tcdrain(serial_fd);                 // ensure it was sent
@@ -67,16 +68,15 @@ char *romReadData(int serial_fd, uint16_t size) {
 
   char *data = malloc(size);
   if (!data) {
-    close(serial_fd);
     return NULL;
   }
 
-  char sizestr[6] = {0};
-  sprintf(sizestr, "%d", size);
+  char sizestr[10] = {0};
+  sprintf(sizestr, "%d\n", size);
 
   // we are sending size data in ASCII instead of raw bin. because I want this
   // to be usable by humans through the serial terminal
-  write(serial_fd, sizestr, strnlen(sizestr, 5));
+  write(serial_fd, sizestr, strnlen(sizestr, 10));
   tcdrain(serial_fd); // wait for data to be sent
 
   ssize_t received = 0;
@@ -85,7 +85,6 @@ char *romReadData(int serial_fd, uint16_t size) {
     if (r < 0) {
       perror("read");
       free(data);
-      close(serial_fd);
       return NULL;
     }
     if (r == 0) {
@@ -95,7 +94,6 @@ char *romReadData(int serial_fd, uint16_t size) {
     received += r;
   }
 
-  close(serial_fd);
   return data;
 }
 
@@ -200,11 +198,13 @@ int main(int argc, char *argv[]) {
     char *data = romReadData(serial_fd, size);
 
     if (data) {
+      close(serial_fd);
       fwrite(data, size, 1, stdout);
       free(data);
       return EXIT_SUCCESS;
     }
-
+    
+    close(serial_fd);
     return EXIT_FAILURE;
 
   } else {
