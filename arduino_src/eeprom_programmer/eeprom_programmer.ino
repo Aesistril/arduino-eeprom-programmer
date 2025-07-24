@@ -126,11 +126,11 @@ void readROMInteractive() {
       printBinary(addr >> 8);  // upper bits
       Serial.print(" ");
       printBinary(addr);  // lower bits
-      Serial.print("0x");
+      Serial.print(" 0x");
       Serial.print(addr, HEX);
       Serial.print("    VAL: ");
       printBinary(value);
-      Serial.print("0x");
+      Serial.print(" 0x");
       Serial.print(value, HEX);
       Serial.println();
 
